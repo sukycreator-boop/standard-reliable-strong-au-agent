@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: ai-agent-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENROUTER_API_KEY
+        scope: secret
+      - key: DATABASE_URL
+        scope: secret
+      - key: APP_URL
+        fromService:
+          type: web
+          property: host
+
+  - type: pserv
+    name: ai-agent-db
+    runtime: postgres14
+    plan: free
+    ipAllowList: []
+    preDeployCommand: echo 'Database setup'
