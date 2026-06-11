@@ -5,11 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🤖 AI Agent Chat</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -26,7 +22,7 @@
       max-width: 700px;
       background: white;
       border-radius: 15px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       display: flex;
       flex-direction: column;
       height: 90vh;
@@ -41,15 +37,20 @@
       text-align: center;
     }
 
-    .header h1 {
-      font-size: 28px;
-      margin-bottom: 5px;
+    .header h1 { font-size: 24px; margin-bottom: 4px; }
+    .header p { font-size: 13px; opacity: 0.9; }
+
+    .status-bar {
+      background: #f0f4ff;
+      padding: 8px 16px;
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+      border-bottom: 1px solid #e0e0e0;
     }
 
-    .header p {
-      font-size: 14px;
-      opacity: 0.9;
-    }
+    .status-bar.error { background: #fff0f0; color: #c00; }
+    .status-bar.success { background: #f0fff4; color: #080; }
 
     .messages {
       flex: 1;
@@ -65,26 +66,15 @@
     }
 
     @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    .message.user {
-      justify-content: flex-end;
-    }
-
-    .message.ai {
-      justify-content: flex-start;
-    }
+    .message.user { justify-content: flex-end; }
+    .message.ai { justify-content: flex-start; }
 
     .message-content {
-      max-width: 70%;
+      max-width: 75%;
       padding: 12px 16px;
       border-radius: 12px;
       word-wrap: break-word;
@@ -104,55 +94,37 @@
       border-bottom-left-radius: 3px;
     }
 
-    .message.loading .message-content {
-      background: #e9ecef;
-      color: #666;
-    }
-
     .typing-indicator {
       display: flex;
       gap: 4px;
       padding: 12px 16px;
+      background: #e9ecef;
+      border-radius: 12px;
+      border-bottom-left-radius: 3px;
     }
 
     .typing-dot {
-      width: 8px;
-      height: 8px;
+      width: 8px; height: 8px;
       border-radius: 50%;
       background: #999;
       animation: typing 1.4s infinite;
     }
-
-    .typing-dot:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .typing-dot:nth-child(3) {
-      animation-delay: 0.4s;
-    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
     @keyframes typing {
-      0%, 60%, 100% {
-        opacity: 0.5;
-        transform: translateY(0);
-      }
-      30% {
-        opacity: 1;
-        transform: translateY(-10px);
-      }
+      0%, 60%, 100% { opacity: 0.4; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-6px); }
     }
 
     .input-area {
-      padding: 20px;
+      padding: 16px;
       border-top: 1px solid #e9ecef;
       background: white;
       border-radius: 0 0 15px 15px;
     }
 
-    .input-wrapper {
-      display: flex;
-      gap: 10px;
-    }
+    .input-wrapper { display: flex; gap: 10px; }
 
     input[type="text"] {
       flex: 1;
@@ -164,16 +136,10 @@
       transition: border-color 0.3s;
     }
 
-    input[type="text"]:focus {
-      border-color: #667eea;
-    }
-
-    input[type="text"]::placeholder {
-      color: #aaa;
-    }
+    input[type="text"]:focus { border-color: #667eea; }
 
     button {
-      padding: 12px 24px;
+      padding: 12px 22px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border: none;
@@ -181,338 +147,253 @@
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: transform 0.2s, opacity 0.2s;
     }
 
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
-    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-    button:active {
-      transform: translateY(0);
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    .retry-btn {
+      display: block;
+      margin: 10px auto 0;
+      padding: 8px 20px;
+      font-size: 13px;
     }
 
     .stats {
-      font-size: 12px;
-      color: #999;
-      margin-top: 10px;
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 8px;
       text-align: center;
-    }
-
-    .error {
-      background: #fee;
-      color: #c33;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-      border-left: 4px solid #c33;
     }
 
     .welcome {
       text-align: center;
       color: #999;
-      padding: 40px 20px;
+      padding: 30px 20px;
     }
 
-    .welcome h2 {
-      font-size: 24px;
-      margin-bottom: 10px;
-      color: #667eea;
-    }
-
-    .welcome p {
-      font-size: 14px;
-      line-height: 1.6;
-    }
+    .welcome h2 { font-size: 22px; margin-bottom: 8px; color: #667eea; }
+    .welcome p { font-size: 13px; line-height: 1.6; }
 
     @media (max-width: 600px) {
-      .container {
-        height: 100vh;
-        max-height: none;
-        border-radius: 0;
-      }
-
-      .header {
-        border-radius: 0;
-      }
-
-      .input-area {
-        border-radius: 0;
-      }
-
-      .message-content {
-        max-width: 85%;
-      }
-
-      .header h1 {
-        font-size: 22px;
-      }
+      .container { height: 100vh; max-height: none; border-radius: 0; }
+      .header, .input-area { border-radius: 0; }
+      .message-content { max-width: 85%; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🤖 AI Agent Chat</h1>
-      <p>Powered by OpenRouter - Fastest Response</p>
-    </div>
+<div class="container">
+  <div class="header">
+    <h1>🤖 AI Agent Chat</h1>
+    <p>Powered by OpenRouter · Free AI Models</p>
+  </div>
 
-    <div class="messages" id="messages">
-      <div class="welcome">
-        <h2>👋 Welcome!</h2>
-        <p>Start a conversation with the AI. Ask anything!</p>
-      </div>
-    </div>
+  <div class="status-bar" id="statusBar">⏳ Connecting to server...</div>
 
-    <div class="input-area">
-      <div class="input-wrapper">
-        <input 
-          type="text" 
-          id="messageInput" 
-          placeholder="Type your message here..."
-          autocomplete="off"
-        >
-        <button id="sendBtn" onclick="sendMessage()">Send</button>
-      </div>
-      <div class="stats">
-        <span id="statsText">Ready to chat</span>
-      </div>
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcomeMsg">
+      <h2>👋 Welcome!</h2>
+      <p>Please wait while we connect to the AI server...<br>This may take up to 60 seconds on first load.</p>
     </div>
   </div>
 
-  <script>
-    const API_URL = 'https://ai-agent-mh2c.onrender.com';
-    let userId, conversationId;
-    let isLoading = false;
+  <div class="input-area">
+    <div class="input-wrapper">
+      <input type="text" id="messageInput" placeholder="Type your message here..." autocomplete="off" disabled>
+      <button id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+    </div>
+    <div class="stats" id="statsText">Initializing...</div>
+  </div>
+</div>
 
-    const messagesDiv = document.getElementById('messages');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const statsText = document.getElementById('statsText');
+<script>
+  const API_URL = 'https://ai-agent-mh2c.onrender.com';
+  let userId, conversationId;
+  let isLoading = false;
+  let initAttempts = 0;
 
-    // Model performance tracking
-    let modelPerformance = {
-      'openrouter/auto': { avgTime: 0, count: 0 },
-      'nousresearch/hermes-3-405b-instruct': { avgTime: 0, count: 0 },
-      'meta-llama/llama-3.3-70b-instruct': { avgTime: 0, count: 0 },
-      'qwen/qwen-3-coder-480b-a35b-instruct': { avgTime: 0, count: 0 },
-      'liquid/lfm2.5-1.2b-instruct': { avgTime: 0, count: 0 },
-      'nvidia/nemotron-3.5-content-safety': { avgTime: 0, count: 0 }
-    };
+  const messagesDiv = document.getElementById('messages');
+  const messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const statsText = document.getElementById('statsText');
+  const statusBar = document.getElementById('statusBar');
 
-    // Get the fastest model based on performance history
-    function getFastestModel() {
-      let fastestModel = 'openrouter/auto'; // Default fallback
-      let fastestTime = Infinity;
+  function setStatus(msg, type = '') {
+    statusBar.textContent = msg;
+    statusBar.className = 'status-bar' + (type ? ' ' + type : '');
+  }
 
-      for (const [model, perf] of Object.entries(modelPerformance)) {
-        if (perf.count > 0 && perf.avgTime < fastestTime) {
-          fastestTime = perf.avgTime;
-          fastestModel = model;
-        }
-      }
+  async function initChat() {
+    initAttempts++;
+    setStatus(`⏳ Waking up server... (attempt ${initAttempts})`);
 
-      // If no performance data, use auto routing
-      if (fastestModel === 'openrouter/auto') {
-        return 'openrouter/auto';
-      }
+    try {
+      // Step 1: ping /api/models first to wake the server
+      const pingRes = await fetch(`${API_URL}/api/models`, { signal: AbortSignal.timeout(30000) });
+      if (!pingRes.ok) throw new Error('Server ping failed');
 
-      return fastestModel;
+      setStatus('🔗 Creating session...');
+
+      // Step 2: init session
+      const sessionRes = await fetch(`${API_URL}/api/session/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!sessionRes.ok) throw new Error(`Session failed: ${sessionRes.status}`);
+      const sessionData = await sessionRes.json();
+      userId = sessionData.userId;
+
+      setStatus('💬 Setting up conversation...');
+
+      // Step 3: create conversation
+      const convRes = await fetch(`${API_URL}/api/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, title: 'Web Chat' }),
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!convRes.ok) throw new Error(`Conversation failed: ${convRes.status}`);
+      const convData = await convRes.json();
+      conversationId = convData.id;
+
+      // Ready!
+      setStatus('✅ Connected! Ready to chat.', 'success');
+      statsText.textContent = 'Connected · Ask me anything!';
+
+      document.getElementById('welcomeMsg').innerHTML = `
+        <h2>✅ Ready to Chat!</h2>
+        <p>You're connected to the AI Agent.<br>Type a message below to get started!</p>
+      `;
+
+      messageInput.disabled = false;
+      sendBtn.disabled = false;
+      messageInput.focus();
+
+    } catch (err) {
+      console.error('Init error:', err);
+      setStatus(`❌ Connection failed: ${err.message}`, 'error');
+      statsText.textContent = 'Failed to connect';
+
+      document.getElementById('welcomeMsg').innerHTML = `
+        <h2>⚠️ Connection Failed</h2>
+        <p style="color:#c00; margin-bottom:10px">${err.message}</p>
+        <p>The server may still be waking up.<br>Please wait and try again.</p>
+        <button class="retry-btn" onclick="initChat()">🔄 Retry Connection</button>
+      `;
     }
+  }
 
-    // Update model performance
-    function updateModelPerformance(model, responseTime) {
-      if (modelPerformance[model]) {
-        const perf = modelPerformance[model];
-        perf.avgTime = (perf.avgTime * perf.count + responseTime) / (perf.count + 1);
-        perf.count++;
+  async function sendMessage() {
+    const message = messageInput.value.trim();
+    if (!message || isLoading) return;
+
+    isLoading = true;
+    sendBtn.disabled = true;
+    messageInput.disabled = true;
+    messageInput.value = '';
+
+    const welcome = messagesDiv.querySelector('.welcome');
+    if (welcome) welcome.remove();
+
+    addMessage(message, 'user');
+
+    // Loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'message ai';
+    loadingDiv.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+    messagesDiv.appendChild(loadingDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    const startTime = Date.now();
+
+    try {
+      const response = await fetch(`${API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          userId,
+          message,
+          model: 'openrouter/auto'
+        }),
+        signal: AbortSignal.timeout(120000)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`API ${response.status}: ${errText}`);
       }
-    }
 
-    // Initialize chat on page load
-    async function initChat() {
-      try {
-        statsText.textContent = 'Initializing...';
-        
-        // Create session
-        const sessionRes = await fetch(`${API_URL}/api/session/init`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const sessionData = await sessionRes.json();
-        userId = sessionData.userId;
+      loadingDiv.remove();
+      const aiContentDiv = addMessage('', 'ai');
 
-        // Create conversation
-        const convRes = await fetch(`${API_URL}/api/conversations`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: userId,
-            title: 'Web Chat Session'
-          })
-        });
-        const convData = await convRes.json();
-        conversationId = convData.id;
+      let aiMessage = '';
+      let totalTokens = 0;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-        messagesDiv.innerHTML = `
-          <div class="welcome">
-            <h2>👋 Ready to Chat!</h2>
-            <p>You're connected to the AI Agent. Start typing to begin!</p>
-          </div>
-        `;
-        
-        statsText.textContent = 'Connected ✓';
-      } catch (error) {
-        console.error('Init error:', error);
-        showError('Failed to initialize chat. Please refresh the page.');
-        statsText.textContent = 'Connection failed';
-      }
-    }
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-    async function sendMessage() {
-      const message = messageInput.value.trim();
-      if (!message || isLoading) return;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
 
-      isLoading = true;
-      sendBtn.disabled = true;
-      messageInput.disabled = true;
-
-      // Clear input
-      messageInput.value = '';
-
-      // Remove welcome message if present
-      const welcome = messagesDiv.querySelector('.welcome');
-      if (welcome) welcome.remove();
-
-      // Add user message
-      addMessage(message, 'user');
-
-      try {
-        // Add loading indicator
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'message ai loading';
-        loadingDiv.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
-        messagesDiv.appendChild(loadingDiv);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-        const startTime = Date.now();
-        
-        // Automatically select the fastest model
-        const selectedModel = getFastestModel();
-        
-        // Send message to AI
-        const response = await fetch(`${API_URL}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            conversationId: conversationId,
-            userId: userId,
-            message: message,
-            model: selectedModel
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        // Handle streaming response
-        let aiMessage = '';
-        let totalTokens = 0;
-        let responseTime = 0;
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        loadingDiv.remove();
-        const aiMessageDiv = addMessage('', 'ai');
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-
-          // Process all complete lines
-          for (let i = 0; i < lines.length - 1; i++) {
-            const line = lines[i];
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.content) {
-                  aiMessage += data.content;
-                  aiMessageDiv.textContent = aiMessage;
-                  messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                }
-                if (data.totalTokens) totalTokens = data.totalTokens;
-                if (data.responseTime) responseTime = data.responseTime;
-              } catch (e) {
-                console.log('Parse error:', e);
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i];
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                aiMessage += data.content;
+                aiContentDiv.textContent = aiMessage;
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
               }
-            }
+              if (data.totalTokens) totalTokens = data.totalTokens;
+            } catch (e) {}
           }
-
-          buffer = lines[lines.length - 1];
         }
-
-        // Update performance stats
-        const totalTime = Date.now() - startTime;
-        updateModelPerformance(selectedModel, totalTime);
-        
-        statsText.textContent = `Response: ${totalTime}ms | Tokens: ${totalTokens} | Auto-optimizing...`;
-
-      } catch (error) {
-        console.error('Send error:', error);
-        loadingDiv.remove();
-        showError('Failed to get AI response. Please try again.');
-        addMessage(messageInput.value || message, 'user');
-      } finally {
-        isLoading = false;
-        sendBtn.disabled = false;
-        messageInput.disabled = false;
-        messageInput.focus();
+        buffer = lines[lines.length - 1];
       }
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      statsText.textContent = `⚡ ${elapsed}s · ${totalTokens} tokens`;
+      setStatus('✅ Connected · Ready to chat.', 'success');
+
+    } catch (err) {
+      loadingDiv.remove();
+      console.error('Chat error:', err);
+      addMessage(`❌ Error: ${err.message}. Please try again.`, 'ai');
+      setStatus('⚠️ Message failed — please retry', 'error');
+    } finally {
+      isLoading = false;
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      messageInput.focus();
     }
+  }
 
-    function addMessage(text, sender) {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${sender}`;
+  function addMessage(text, sender) {
+    const div = document.createElement('div');
+    div.className = `message ${sender}`;
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    content.textContent = text;
+    div.appendChild(content);
+    messagesDiv.appendChild(div);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    return content;
+  }
 
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'message-content';
-      contentDiv.textContent = text;
+  messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !isLoading) sendMessage();
+  });
 
-      messageDiv.appendChild(contentDiv);
-      messagesDiv.appendChild(messageDiv);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-      return contentDiv;
-    }
-
-    function showError(errorText) {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error';
-      errorDiv.textContent = '❌ ' + errorText;
-      messagesDiv.insertBefore(errorDiv, messagesDiv.firstChild);
-    }
-
-    // Event listeners
-    messageInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !isLoading) {
-        sendMessage();
-      }
-    });
-
-    // Initialize on load
-    initChat();
-  </script>
+  initChat();
+</script>
 </body>
 </html>
