@@ -20,28 +20,52 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Rate limiting - protect against abuse
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 const chatLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 20, // 20 chat messages per minute
+  windowMs: 1 * 60 * 1000,
+  max: 20,
   skipSuccessfulRequests: false,
 });
 
 app.use('/api/', limiter);
 app.use('/api/chat', chatLimiter);
 
+// ==================== FREE MODELS (no credits needed) ====================
+const FREE_MODELS = [
+  'meta-llama/llama-4-scout:free',
+  'meta-llama/llama-4-maverick:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'qwen/qwen3-coder:free',
+  'mistralai/mistral-7b-instruct:free',
+];
+
+// Always use a free model — strip :free suffix if present then re-add
+// or fall back to first free model if unknown model sent
+function resolveFreeModel(requestedModel) {
+  if (!requestedModel || requestedModel === 'openrouter/auto') {
+    return FREE_MODELS[0];
+  }
+  // If already a :free model, use as-is
+  if (requestedModel.endsWith(':free')) {
+    return requestedModel;
+  }
+  // Try to find matching free version
+  const base = requestedModel.split(':')[0];
+  const match = FREE_MODELS.find(m => m.startsWith(base));
+  return match || FREE_MODELS[0];
+}
+
 // ==================== INITIALIZE DATABASE ====================
 async function initializeDatabase() {
   try {
-    // Create users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -52,7 +76,6 @@ async function initializeDatabase() {
       );
     `);
 
-    // Create conversations table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS conversations (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -63,7 +86,6 @@ async function initializeDatabase() {
       );
     `);
 
-    // Create messages table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -76,7 +98,6 @@ async function initializeDatabase() {
       );
     `);
 
-    // Create usage stats table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usage_stats (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -89,7 +110,6 @@ async function initializeDatabase() {
       );
     `);
 
-    // Create indices for performance
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
       CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
@@ -107,13 +127,11 @@ initializeDatabase();
 // ==================== HELPER FUNCTIONS ====================
 async function getOrCreateUser(sessionId) {
   const userId = `user_${sessionId}`;
-  
   try {
     const result = await pool.query(
       'SELECT * FROM users WHERE session_id = $1',
       [userId]
     );
-
     if (result.rows.length === 0) {
       const newUser = await pool.query(
         'INSERT INTO users (session_id) VALUES ($1) RETURNING *',
@@ -121,13 +139,10 @@ async function getOrCreateUser(sessionId) {
       );
       return newUser.rows[0];
     }
-
-    // Update last_active
     await pool.query(
       'UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE session_id = $1',
       [userId]
     );
-
     return result.rows[0];
   } catch (err) {
     console.error('Error managing user:', err);
@@ -174,39 +189,49 @@ async function getConversationHistory(conversationId, limit = 20) {
   }
 }
 
-// Retry logic for API calls
+// Retry with model fallback — tries each free model until one works
 async function callOpenRouterWithRetry(payload, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
-          },
-          responseType: 'stream',
-          timeout: 30000,
+  const modelsToTry = [payload.model, ...FREE_MODELS.filter(m => m !== payload.model)];
+
+  for (const model of modelsToTry) {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        console.log(`🤖 Trying model: ${model}`);
+        return await axios.post(
+          'https://openrouter.ai/api/v1/chat/completions',
+          { ...payload, model },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
+              'X-Title': 'AI Agent Chat',
+            },
+            responseType: 'stream',
+            timeout: 60000,
+          }
+        );
+      } catch (err) {
+        const status = err.response?.status;
+        console.error(`❌ Model ${model} failed (${status}): ${err.message}`);
+        // 402 = no credits, 429 = rate limit, 503 = unavailable — try next model
+        if (status === 402 || status === 503 || status === 429) {
+          break; // try next model
         }
-      );
-    } catch (err) {
-      if (i === maxRetries - 1) throw err;
-      
-      // Exponential backoff
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+        if (i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+        }
+      }
     }
   }
+  throw new Error('All models failed. Please try again later.');
 }
 
 // ==================== API ENDPOINTS ====================
 
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
 
-// Initialize session
 app.post('/api/session/init', async (req, res) => {
   try {
     const sessionId = uuidv4();
@@ -218,15 +243,12 @@ app.post('/api/session/init', async (req, res) => {
   }
 });
 
-// Create new conversation
 app.post('/api/conversations', async (req, res) => {
   try {
     const { userId, title } = req.body;
-    
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
     }
-
     const conversation = await createConversation(userId, title);
     res.json(conversation);
   } catch (err) {
@@ -235,7 +257,6 @@ app.post('/api/conversations', async (req, res) => {
   }
 });
 
-// Get user's conversations
 app.get('/api/conversations/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -250,7 +271,6 @@ app.get('/api/conversations/:userId', async (req, res) => {
   }
 });
 
-// Get conversation history
 app.get('/api/conversations/:conversationId/history', async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -264,26 +284,21 @@ app.get('/api/conversations/:conversationId/history', async (req, res) => {
 
 // Chat with streaming
 app.post('/api/chat', async (req, res) => {
-  const { conversationId, userId, message, model = 'openrouter/auto' } = req.body;
+  const { conversationId, userId, message, model } = req.body;
 
   if (!conversationId || !userId || !message) {
     return res.status(400).json({ error: 'Missing required fields: conversationId, userId, message' });
   }
 
+  // Always resolve to a free model
+  const resolvedModel = resolveFreeModel(model);
+  console.log(`💬 Chat request — model: ${resolvedModel}`);
+
   try {
-    // Save user message
-    await saveMessage(conversationId, 'user', message, model, 0);
-
-    // Get conversation history
+    await saveMessage(conversationId, 'user', message, resolvedModel, 0);
     const history = await getConversationHistory(conversationId);
+    const messages = [...history, { role: 'user', content: message }];
 
-    // Prepare messages for OpenRouter
-    const messages = [
-      ...history,
-      { role: 'user', content: message }
-    ];
-
-    // Set response headers for streaming
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -294,8 +309,8 @@ app.post('/api/chat', async (req, res) => {
 
     try {
       const response = await callOpenRouterWithRetry({
-        model: model,
-        messages: messages,
+        model: resolvedModel,
+        messages,
         stream: true,
         temperature: 0.7,
         top_p: 0.9,
@@ -304,43 +319,31 @@ app.post('/api/chat', async (req, res) => {
 
       response.data.on('data', (chunk) => {
         const lines = chunk.toString().split('\n');
-
         lines.forEach((line) => {
           if (line.startsWith('data: ') && !line.includes('[DONE]')) {
             try {
               const data = JSON.parse(line.slice(6));
               const content = data.choices?.[0]?.delta?.content || '';
-              
               if (content) {
                 fullResponse += content;
                 res.write(`data: ${JSON.stringify({ content, streaming: true })}\n\n`);
               }
-
-              // Track tokens
               if (data.usage) {
                 totalTokens = data.usage.total_tokens || 0;
               }
-            } catch (e) {
-              // Ignore parse errors on individual chunks
-            }
+            } catch (e) {}
           }
         });
       });
 
       response.data.on('end', async () => {
         const responseTime = Date.now() - startTime;
-
         try {
-          // Save assistant response
-          await saveMessage(conversationId, 'assistant', fullResponse, model, totalTokens);
-
-          // Save usage stats
+          await saveMessage(conversationId, 'assistant', fullResponse, resolvedModel, totalTokens);
           await pool.query(
             'INSERT INTO usage_stats (user_id, model_used, tokens_input, tokens_output, response_time_ms) VALUES ($1, $2, $3, $4, $5)',
-            [userId, model, 0, totalTokens, responseTime]
+            [userId, resolvedModel, 0, totalTokens, responseTime]
           );
-
-          // Update conversation
           await pool.query(
             'UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
             [conversationId]
@@ -348,7 +351,6 @@ app.post('/api/chat', async (req, res) => {
         } catch (err) {
           console.error('Error saving message:', err);
         }
-
         res.write(`data: ${JSON.stringify({ done: true, totalTokens, responseTime })}\n\n`);
         res.end();
       });
@@ -358,9 +360,10 @@ app.post('/api/chat', async (req, res) => {
         res.write(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`);
         res.end();
       });
+
     } catch (err) {
-      console.error('OpenRouter API error:', err.response?.data || err.message);
-      const errorMessage = err.response?.data?.error?.message || err.message || 'API error';
+      console.error('OpenRouter API error:', err.message);
+      const errorMessage = err.message || 'API error';
       res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
       res.end();
     }
@@ -370,24 +373,22 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Get available models
+// Get available models (all free)
 app.get('/api/models', (req, res) => {
   const models = [
-    { id: 'openrouter/auto', name: 'Auto (Free Router)', description: 'Automatically routes to best available free model' },
-    { id: 'nousresearch/hermes-3-405b-instruct', name: 'Hermes 3 405B', description: 'Excellent generalist with strong instruction following' },
-    { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', description: 'Powerful reasoning and code generation' },
-    { id: 'qwen/qwen-3-coder-480b-a35b-instruct', name: 'Qwen3 Coder 480B', description: 'Best for code generation and debugging' },
-    { id: 'liquid/lfm2.5-1.2b-instruct', name: 'LFM2.5 1.2B', description: 'Fast and lightweight' },
-    { id: 'nvidia/nemotron-3.5-content-safety', name: 'Nemotron 3.5', description: 'Safe and reliable responses' },
+    { id: 'meta-llama/llama-4-scout:free', name: 'Llama 4 Scout', description: 'Fast & free — great for chat' },
+    { id: 'meta-llama/llama-4-maverick:free', name: 'Llama 4 Maverick', description: 'Powerful free model with vision' },
+    { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', description: 'Strong reasoning, completely free' },
+    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1', description: 'Excellent reasoning & coding' },
+    { id: 'qwen/qwen3-coder:free', name: 'Qwen3 Coder', description: 'Best free coding model' },
+    { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B', description: 'Lightweight & fast' },
   ];
   res.json(models);
 });
 
-// Get user stats
 app.get('/api/stats/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    
     const stats = await pool.query(
       `SELECT 
         COUNT(*) as total_messages,
@@ -398,7 +399,6 @@ app.get('/api/stats/:userId', async (req, res) => {
       FROM usage_stats WHERE user_id = $1`,
       [userId]
     );
-
     res.json(stats.rows[0] || {
       total_messages: 0,
       total_input_tokens: 0,
@@ -412,7 +412,6 @@ app.get('/api/stats/:userId', async (req, res) => {
   }
 });
 
-// Get admin stats
 app.get('/api/admin/stats', async (req, res) => {
   try {
     const stats = await pool.query(`
@@ -430,13 +429,11 @@ app.get('/api/admin/stats', async (req, res) => {
   }
 });
 
-// Error handling
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 AI Agent Server running on port ${PORT}`);
@@ -444,6 +441,7 @@ app.listen(PORT, () => {
   console.log(`💬 Chat endpoint: POST /api/chat`);
   console.log(`📈 Stats endpoint: GET /api/stats/:userId`);
   console.log(`⚙️  Admin stats: GET /api/admin/stats`);
+  console.log(`🆓 Free models: ${FREE_MODELS.join(', ')}`);
 });
 
 module.exports = app;
