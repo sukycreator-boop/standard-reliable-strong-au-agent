@@ -17,6 +17,15 @@ services:
           type: web
           property: host
 
+  - type: web
+    name: ai-agent-frontend
+    runtime: static
+    staticPublishPath: ./frontend
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
   - type: pserv
     name: ai-agent-db
     runtime: postgres14
